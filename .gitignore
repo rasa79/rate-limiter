@@ -21,3 +21,6 @@ target/
 # Local Maven caches (sandbox-only workspace redirection; never committed)
 .m2-repo/
 .mvn-home/
+
+# jqwik persistent statistics database (regenerated per run)
+.jqwik-database
