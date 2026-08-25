@@ -1,0 +1,141 @@
+# Full production-shaped topology.
+#   nginx (least_conn LB) -> 3 stateless rate-limiter instances -> Valkey HA
+#   (primary + replica + 3 sentinels), with Prometheus/Grafana/Alertmanager,
+#   autoheal, and the SaaS-tiers example app.
+#
+# Observability runs in SEPARATE containers ("observability must outlive the
+# observed"), so it survives and reports when the monitored system crashes.
+services:
+  # ---- Valkey: primary + replica + 3 sentinels (quorum 2 of 3) --------------
+  valkey-primary:
+    image: valkey/valkey:8
+    command: ["valkey-server", "/etc/valkey/valkey-primary.conf"]
+    volumes:
+      - ./valkey/valkey-primary.conf:/etc/valkey/valkey-primary.conf
+    restart: unless-stopped
+
+  valkey-replica:
+    image: valkey/valkey:8
+    command: ["valkey-server", "/etc/valkey/valkey-replica.conf"]
+    volumes:
+      - ./valkey/valkey-replica.conf:/etc/valkey/valkey-replica.conf
+    depends_on:
+      - valkey-primary
+    restart: unless-stopped
+
+  sentinel-1:
+    image: valkey/valkey:8
+    command: ["valkey-sentinel", "/etc/valkey/sentinel.conf"]
+    volumes:
+      - ./valkey/sentinel.conf:/etc/valkey/sentinel.conf
+    depends_on:
+      - valkey-primary
+      - valkey-replica
+    restart: unless-stopped
+  sentinel-2:
+    image: valkey/valkey:8
+    command: ["valkey-sentinel", "/etc/valkey/sentinel.conf"]
+    volumes:
+      - ./valkey/sentinel.conf:/etc/valkey/sentinel.conf
+    depends_on:
+      - valkey-primary
+      - valkey-replica
+    restart: unless-stopped
+  sentinel-3:
+    image: valkey/valkey:8
+    command: ["valkey-sentinel", "/etc/valkey/sentinel.conf"]
+    volumes:
+      - ./valkey/sentinel.conf:/etc/valkey/sentinel.conf
+    depends_on:
+      - valkey-primary
+      - valkey-replica
+    restart: unless-stopped
+
+  # ---- Stateless service instances (discover the primary via Sentinel) -------
+  rate-limiter-1:
+    build: ../service
+    environment: &servenv
+      RATELIMITER_STORE: valkey
+      RATELIMITER_VALKEY_HOST: sentinel-1
+      RATELIMITER_VALKEY_PORT: "26379"
+      RATELIMITER_VALKEY_SENTINEL_MASTER_ID: ratelimiter
+    depends_on:
+      - valkey-primary
+      - sentinel-1
+    restart: unless-stopped
+  rate-limiter-2:
+    build: ../service
+    environment:
+      <<: *servenv
+    depends_on:
+      - valkey-primary
+      - sentinel-1
+    restart: unless-stopped
+  rate-limiter-3:
+    build: ../service
+    environment:
+      <<: *servenv
+    depends_on:
+      - valkey-primary
+      - sentinel-1
+    restart: unless-stopped
+
+  # ---- Load balancer (least_conn, no sticky sessions) ------------------------
+  nginx:
+    image: nginx:1.27
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - rate-limiter-1
+      - rate-limiter-2
+      - rate-limiter-3
+    restart: unless-stopped
+
+  # ---- Observability (separate containers) -----------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - rate-limiter-1
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    volumes:
+      - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "9093:9093"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # ---- Autoheal: restarts unhealthy (non-docker-healthy) containers ----------
+  autoheal:
+    image: willfarrell/autoheal:latest
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: all
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+  # Examples (1-3) are wired into the compose environment in M13.

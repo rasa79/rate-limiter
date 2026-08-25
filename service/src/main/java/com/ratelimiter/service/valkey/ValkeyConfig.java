@@ -34,12 +34,19 @@ public class ValkeyConfig {
      */
     @Bean(destroyMethod = "shutdown")
     public RedisClient redisClient(ValkeyProperties properties) {
-        RedisURI uri = RedisURI.builder()
-                .withHost(properties.host())
-                .withPort(properties.port())
-                .withTimeout(Duration.ofMillis(properties.timeoutMillis()))
-                .build();
-        return RedisClient.create(uri);
+        // RATIONALE: with a Sentinel master-group id configured, the client
+        // discovers the current primary through Sentinel (auto-follows failover);
+        // otherwise it connects directly to host:port. Either way decisions are
+        // atomic, so a failover never leaves partial state (ADR-0003).
+        RedisURI.Builder builder = RedisURI.builder()
+                .withTimeout(Duration.ofMillis(properties.timeoutMillis()));
+        if (properties.sentinelMasterId() != null && !properties.sentinelMasterId().isBlank()) {
+            builder.withSentinel(properties.host(), properties.port())
+                    .withSentinelMasterId(properties.sentinelMasterId());
+        } else {
+            builder.withHost(properties.host()).withPort(properties.port());
+        }
+        return RedisClient.create(builder.build());
     }
 
     /**

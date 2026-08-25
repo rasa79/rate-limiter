@@ -64,3 +64,49 @@ box.
 > Grafana, Alertmanager) runs in separate containers/hosts from the rate-limit
 > service, so it keeps running — and keeps reporting — exactly when the thing it
 > monitors crashes.
+
+## Deployment (M10)
+
+The primary deliverable is a one-command production-shaped topology in
+`deploy/docker-compose.yml`:
+
+```
+nginx (least_conn, no sticky) → 3 stateless rate-limiter instances
+  → Valkey HA (primary + replica + 3 sentinels, quorum 2 of 3)
+  + Prometheus / Grafana / Alertmanager (separate containers) + autoheal
+```
+
+```shell
+cd deploy && docker compose up --build
+# checks pass through nginx on http://localhost/ (via /v1/check)
+```
+
+`docker-compose.yml` also mounts the Valkey AOF configs (`appendonly yes`,
+`appendfsync everysec` — ADR-0002) and nginx/observability configs.
+
+### Failover walkthrough
+
+```shell
+docker stop deploy-valkey-primary-1   # kill the Valkey primary
+# Sentinel (quorum 2 of 3) promotes the replica to primary within ~seconds;
+# the service instances discover the new primary via Sentinel and keep answering
+# (Lettuce auto-follows the failover). No instance restart is needed.
+```
+
+`autoheal` (`willfarrell/autoheal`) restarts containers that lose their Docker
+health check (the service `HEALTHCHECK` hits Actuator liveness). In a real
+deployment this is replaced by Kubernetes: a **liveness probe** = restart the pod,
+a **readiness probe** = stop routing traffic (nginx upstreams use the same idea).
+
+### VPS layout — "things that fail together shouldn't live together"
+
+For a self-hosted VPS deployment, separate failure domains: load balancer, the
+service VMs, Valkey primary and each replica on different machines, and monitoring
+on its own host. (A single-host Docker Compose is an easy start but is not
+failure-isolated.)
+
+> Automated Sentinel-failover test note: an end-to-end `SentinelFailoverIT` proving
+> a host-resident service reconnects across a containerized-sentinel failover is a
+> known challenge (the Sentinel returns container-network addresses a host JVM
+> cannot resolve); the Sentinel code path and the compose topology are delivered
+> and the valkey-level failover (promote replica) is validated manually.
