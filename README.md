@@ -65,6 +65,15 @@ box.
 > service, so it keeps running — and keeps reporting — exactly when the thing it
 > monitors crashes.
 
+## Benchmarks (evidence track)
+
+Honest, reproducible numbers live in `docs/benchmarks.md` with the exact
+reproduction commands and environment. JMH micro-benchmarks measure the algorithm
+decision cost (currently ~37 ns/op token bucket, ~69 ns/op sliding window); k6
+measures end-to-end p50/p99 and throughput through nginx → instances → Valkey.
+These are evidence, not gates — numbers are committed so a reviewer can reproduce
+them within an order of magnitude.
+
 ## Deployment (M10)
 
 The primary deliverable is a one-command production-shaped topology in
