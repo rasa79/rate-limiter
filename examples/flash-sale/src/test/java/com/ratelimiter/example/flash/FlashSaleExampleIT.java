@@ -19,6 +19,11 @@ import org.springframework.web.client.RestClient;
  */
 class FlashSaleExampleIT {
 
+    // TODO(review): fail-closed payment path proven by filter unit test +
+    // application.yml only — add IT covering failClosedRules binding from the
+    // application config (command-line list binding was unreliable) — tracked in
+    // KNOWN_LIMITATIONS.md
+
     private ConfigurableApplicationContext service;
     private ConfigurableApplicationContext app;
 

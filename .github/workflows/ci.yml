@@ -59,6 +59,8 @@ jobs:
       # integration + concurrency suite (failsafe, *IT / *ConcurrencyIT), all
       # PR-gated. The concurrency suite proves Lua atomicity with exact-equality
       # assertions; it must run in the PR gate (not just nightly).
+      # TODO(review): promtool/amtool config validation for deploy/prometheus/* is
+      # not wired into CI — tracked in KNOWN_LIMITATIONS.md
       - name: Build and verify
         run: ./mvnw -B -ntp verify
 

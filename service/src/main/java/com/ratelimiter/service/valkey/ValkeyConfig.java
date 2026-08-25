@@ -40,6 +40,9 @@ public class ValkeyConfig {
         // atomic, so a failover never leaves partial state (ADR-0003).
         RedisURI.Builder builder = RedisURI.builder()
                 .withTimeout(Duration.ofMillis(properties.timeoutMillis()));
+        // TODO(review): Sentinel end-to-end failover test (SentinelFailoverIT) not
+        // implemented — the containerized Sentinel returns container-network master
+        // addresses a host JVM cannot resolve — tracked in KNOWN_LIMITATIONS.md
         if (properties.sentinelMasterId() != null && !properties.sentinelMasterId().isBlank()) {
             builder.withSentinel(properties.host(), properties.port())
                     .withSentinelMasterId(properties.sentinelMasterId());

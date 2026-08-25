@@ -18,6 +18,19 @@ import com.ratelimiter.service.valkey.ScriptLoader;
  */
 class ClockManipulationChaosIT extends ValkeyIntegrationTestBase {
 
+    // TODO(review): the Toxiproxy-based ValkeyUnreachableChaosIT (cut the
+    // service↔Valkey link) is not implemented — the Toxiproxy proxy's mapped port
+    // is not reachable from a host-resident service — tracked in KNOWN_LIMITATIONS.md
+    // TODO(review): the Toxiproxy-based LatencyInjectionChaosIT (+5s latency ->
+    // bounded timeout) is not implemented — same proxy-port reachability blocker —
+    // tracked in KNOWN_LIMITATIONS.md
+    // TODO(review): PrimaryKillChaosIT (kill primary under traffic -> failover +
+    // consistent counters) is not implemented — depends on the SentinelFailoverIT
+    // harness — tracked in KNOWN_LIMITATIONS.md
+    // TODO(review): InstanceKillChaosIT (kill an instance mid-burst, audit counters)
+    // is not implemented — heavy/flaky orchestration; atomicity is covered by the
+    // exact-N concurrency suite — tracked in KNOWN_LIMITATIONS.md
+
     @Autowired
     private ScriptLoader scriptLoader;
 

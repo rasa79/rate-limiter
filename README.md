@@ -145,6 +145,21 @@ measures end-to-end p50/p99 and throughput through nginx → instances → Valke
 These are evidence, not gates — numbers are committed so a reviewer can reproduce
 them within an order of magnitude.
 
+## Testing
+
+The deterministic proof lives in `./mvnw verify` (unit, property, container-backed
+integration, exact-N concurrency, metrics, example ITs). Two user-visible
+limitations are tracked in [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md):
+
+- The nginx load balancer uses **passive** upstream health checks
+  (`max_fails`/`fail_timeout`) rather than active readiness probes, so a down
+  instance is only removed after a few failed attempts.
+- The example apps (SaaS tiers, flash sale, Python worker) are **not** built or
+  wired into `docker compose`; each runs separately via its own README.
+
+(Internal-only limitations — test-coverage/tooling gaps — are documented only in
+`KNOWN_LIMITATIONS.md`.)
+
 ## Deployment (M10)
 
 The primary deliverable is a one-command production-shaped topology in

@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# TODO(review): no automated PythonWorkerExampleIT — the worker's quota + retry
+# behaviour is not integration-tested; only documented. Add a compose-level smoke
+# that asserts the worker re-queues for exactly retry_after_seconds — tracked in
+# KNOWN_LIMITATIONS.md
 """Example worker: prove polyglot consumption against the rate-limiter HTTP API.
 
 A data-warehouse worker pulls jobs and checks a rolling-daily upstream quota

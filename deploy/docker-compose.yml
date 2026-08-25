@@ -5,6 +5,11 @@
 #
 # Observability runs in SEPARATE containers ("observability must outlive the
 # observed"), so it survives and reports when the monitored system crashes.
+#
+# TODO(review): example apps are NOT built/wired into this compose (no example
+# Dockerfiles); each runs separately via its README — tracked in KNOWN_LIMITATIONS.md
+# TODO(review): no ComposeSmokeIT — `docker compose config` validation + nginx
+# config lint are not wired into CI — tracked in KNOWN_LIMITATIONS.md
 services:
   # ---- Valkey: primary + replica + 3 sentinels (quorum 2 of 3) --------------
   valkey-primary:

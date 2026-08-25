@@ -217,6 +217,9 @@
                     </execution>
                     <!-- The chaos suite (*ChaosIT) is run only when the 'chaos'
                          Maven profile is active (nightly CI: -P chaos). -->
+                    <!-- TODO(review): the chaos suite runs TWICE under -P chaos (the
+                         default execution still matches *ChaosIT despite this exclude)
+                         — tracked in KNOWN_LIMITATIONS.md -->
                 </executions>
             </plugin>
 

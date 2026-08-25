@@ -19,6 +19,9 @@ import org.openjdk.jmh.annotations.State;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @State(Scope.Benchmark)
+// TODO(review): JMH is run in-process (-f 0) because jmh-core is 'provided' so a
+// forked JVM can't find ForkedMain — the committed numbers are not forked — tracked
+// in KNOWN_LIMITATIONS.md
 public class TokenBucketBenchmark {
 
     private static final long NOW = 1_800_000_000_000L;

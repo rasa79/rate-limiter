@@ -30,6 +30,10 @@ import org.springframework.test.context.TestPropertySource;
 @TestPropertySource(properties = "ratelimiter.cache-ttl-seconds=1")
 class HotReloadMultiInstanceIT extends ValkeyIntegrationTestBase {
 
+    // TODO(review): the "second instance" is modeled as a second RuleCache view
+    // rather than a second full Spring/Tomcat context as the plan specified —
+    // tracked in KNOWN_LIMITATIONS.md
+
     @Autowired
     private AdminController adminController;
 
