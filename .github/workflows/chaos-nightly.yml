@@ -1,0 +1,50 @@
+name: chaos-nightly
+
+# Nightly fault-injection suite. This is NOT PR-gating: it proves failure semantics
+# (ADR-0001/2/3) and posts results, but a potential failure here should never block
+# an ordinary feature PR — it signals a reliability regression to investigate.
+on:
+  schedule:
+    - cron: '0 2 * * *'   # nightly 02:00 UTC
+  workflow_dispatch: {}   # manual trigger
+
+jobs:
+  chaos:
+    name: Chaos (${{ matrix.java }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java: ['25']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+
+      - name: Cache Maven wrapper + local repository
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/wrapper
+            ~/.m2/repository
+          key: maven-cache-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            maven-cache-${{ runner.os }}-
+
+      - name: Make Maven wrapper executable
+        run: chmod +x mvnw
+
+      # Enable the chaos suite (a Maven profile, off by default) and run it
+      # alongside the rest of the service verify. Nightly only — not PR-gating.
+      - name: Run chaos suite
+        run: ./mvnw -B -ntp -P chaos -pl service verify
+
+      - name: Upload chaos reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaos-reports
+          path: service/target/failsafe-reports/
+          if-no-files-found: warn

@@ -97,6 +97,14 @@
             <artifactId>testcontainers</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!-- Toxiproxy (chaos): to inject network faults (cut/latency) between the
+             service and Valkey. Version from the Testcontainers BOM. -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>toxiproxy</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -164,7 +172,9 @@
                 Failsafe runs the end-to-end integration tests (*IT) during
                 `verify`. It is deliberately a separate plugin from surefire so
                 the fast unit/property suite stays PR-time and the slower
-                container-backed suite still gates the build.
+                container-backed suite still gates the build. The chaos suite
+                (*ChaosIT) is excluded from the default run and gated behind
+                -DskipChaosTests=false (nightly only), so it never blocks a PR.
             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -176,7 +186,17 @@
                             <goal>integration-test</goal>
                             <goal>verify</goal>
                         </goals>
+                        <configuration>
+                            <includes>
+                                <include>**/*IT</include>
+                            </includes>
+                            <excludes>
+                                <exclude>**/*ChaosIT</exclude>
+                            </excludes>
+                        </configuration>
                     </execution>
+                    <!-- The chaos suite (*ChaosIT) is run only when the 'chaos'
+                         Maven profile is active (nightly CI: -P chaos). -->
                 </executions>
             </plugin>
 
@@ -211,4 +231,58 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!--
+            Chaos / fault-injection suite. Activated from the nightly CI job
+            (`mvn -P chaos verify`) so it never runs as part of the default
+            `mvn verify` (the PR gate). The source set is always compiled; only
+            the execution is gated here.
+        -->
+        <profile>
+            <id>chaos</id>
+            <build>
+                <plugins>
+                    <!-- Add the chaos source set only when the profile is active, so
+                         the default build never even compiles the chaos tests. -->
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>build-helper-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>add-chaos-test-sources</id>
+                                <phase>generate-test-sources</phase>
+                                <goals>
+                                    <goal>add-test-source</goal>
+                                </goals>
+                                <configuration>
+                                    <sources>
+                                        <source>src/chaosTest/java</source>
+                                    </sources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-failsafe-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>chaos-tests</id>
+                                <goals>
+                                    <goal>integration-test</goal>
+                                    <goal>verify</goal>
+                                </goals>
+                                <configuration>
+                                    <includes>
+                                        <include>**/*ChaosIT</include>
+                                    </includes>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
