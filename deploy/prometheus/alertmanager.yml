@@ -1,0 +1,22 @@
+# Alertmanager routing/grouping/dedup. Route to a real receiver (Slack webhook or
+# email) by filling in the webhook_configs / email address; the routing rules below
+# are the fixed part. CI validates this file with `amtool check-config`.
+route:
+  receiver: default
+  group_by: [alertname, severity]
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 4h
+
+  routes:
+    # Auto-recovered / operational issues stay on the dashboard log; human-decision
+    # events (a real outage) go to the on-call receiver.
+    - matchers:
+        - severity="critical"
+      receiver: oncall
+
+receivers:
+  - name: default
+    # dashboard/log only (no-op receiver for now; override in a real deployment).
+  - name: oncall
+    # e.g. webhook_configs: [{ url: "https://hooks.slack.com/services/..." }]

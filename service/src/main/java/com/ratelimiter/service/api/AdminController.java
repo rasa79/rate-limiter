@@ -1,6 +1,8 @@
 package com.ratelimiter.service.api;
 
+import java.time.Duration;
 import java.util.Map;
+import java.util.function.Supplier;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -10,6 +12,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import com.ratelimiter.service.metrics.Metrics;
 import com.ratelimiter.service.pubsub.RuleInvalidationPublisher;
 import com.ratelimiter.service.rules.Rule;
 import com.ratelimiter.service.rules.RuleCache;
@@ -32,19 +35,22 @@ public class AdminController {
     private final RuleCache cache;
     private final RuleValidator validator;
     private final ObjectProvider<RuleInvalidationPublisher> publisher;
+    private final Metrics metrics;
 
     /**
      * @param store the source-of-truth rule store
      * @param cache the rule cache to invalidate on write
      * @param validator validates incoming rules
      * @param publisher (valkey mode) cross-instance invalidation; absent in in-memory
+     * @param metrics the observability instrumentation
      */
     public AdminController(RuleStore store, RuleCache cache, RuleValidator validator,
-            ObjectProvider<RuleInvalidationPublisher> publisher) {
+            ObjectProvider<RuleInvalidationPublisher> publisher, Metrics metrics) {
         this.store = store;
         this.cache = cache;
         this.validator = validator;
         this.publisher = publisher;
+        this.metrics = metrics;
     }
 
     /**
@@ -56,16 +62,18 @@ public class AdminController {
      */
     @PutMapping("/{name}")
     public Rule put(@PathVariable String name, @RequestBody RuleUpdateRequest request) {
-        Rule rule = new Rule(name, request.algorithm(), request.limit(),
-                request.refillPerSecond(), request.windowMillis());
-        validator.validate(rule);
-        store.save(rule);
-        cache.invalidate(name);
-        RuleInvalidationPublisher pub = publisher.getIfAvailable();
-        if (pub != null) {
-            pub.publish(name);
-        }
-        return rule;
+        return timed("PUT", () -> {
+            Rule rule = new Rule(name, request.algorithm(), request.limit(),
+                    request.refillPerSecond(), request.windowMillis());
+            validator.validate(rule);
+            store.save(rule);
+            cache.invalidate(name);
+            RuleInvalidationPublisher pub = publisher.getIfAvailable();
+            if (pub != null) {
+                pub.publish(name);
+            }
+            return rule;
+        });
     }
 
     /**
@@ -94,12 +102,23 @@ public class AdminController {
      */
     @DeleteMapping("/{name}")
     public ResponseEntity<Void> delete(@PathVariable String name) {
-        store.delete(name);
-        cache.invalidate(name);
-        RuleInvalidationPublisher pub = publisher.getIfAvailable();
-        if (pub != null) {
-            pub.publish(name);
+        return timed("DELETE", () -> {
+            store.delete(name);
+            cache.invalidate(name);
+            RuleInvalidationPublisher pub = publisher.getIfAvailable();
+            if (pub != null) {
+                pub.publish(name);
+            }
+            return ResponseEntity.noContent().build();
+        });
+    }
+
+    private <T> T timed(String method, Supplier<T> action) {
+        long start = System.nanoTime();
+        try {
+            return action.get();
+        } finally {
+            metrics.recordAdmin(method, Duration.ofNanos(System.nanoTime() - start));
         }
-        return ResponseEntity.noContent().build();
     }
 }

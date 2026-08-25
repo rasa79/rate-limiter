@@ -1,8 +1,10 @@
 package com.ratelimiter.service.api;
 
+import io.micrometer.core.instrument.Timer;
 import java.time.Clock;
 import com.ratelimiter.service.algorithm.Decision;
 import com.ratelimiter.service.backend.RateLimitStore;
+import com.ratelimiter.service.metrics.Metrics;
 import com.ratelimiter.service.rules.Rule;
 import com.ratelimiter.service.rules.RuleCache;
 import org.springframework.http.MediaType;
@@ -29,17 +31,20 @@ public class CheckController {
     private final RateLimitStore store;
     private final RuleCache ruleCache;
     private final Clock clock;
+    private final Metrics metrics;
 
     /**
      * @param store the rate-limit state store (the component that will be
      *              swapped for a Valkey backend in M4)
      * @param ruleCache resolves a request's rule name, refreshing from the store
      * @param clock supplies "now" to the decision
+     * @param metrics the observability instrumentation
      */
-    public CheckController(RateLimitStore store, RuleCache ruleCache, Clock clock) {
+    public CheckController(RateLimitStore store, RuleCache ruleCache, Clock clock, Metrics metrics) {
         this.store = store;
         this.ruleCache = ruleCache;
         this.clock = clock;
+        this.metrics = metrics;
     }
 
     /**
@@ -59,11 +64,31 @@ public class CheckController {
                 || request.rule() == null || request.rule().isBlank()) {
             throw new IllegalArgumentException("'key' and 'rule' are required");
         }
-        Rule rule = ruleCache.resolve(request.rule())
-                .orElseThrow(() -> new UnknownRuleException(request.rule()));
-
         long nowMillis = clock.millis();
-        Decision decision = store.check(request.key(), rule, DEFAULT_REQUEST_TOKENS, nowMillis);
+
+        Rule rule;
+        Decision decision;
+        try {
+            rule = ruleCache.resolve(request.rule())
+                    .orElseThrow(() -> new UnknownRuleException(request.rule()));
+            Timer.Sample sample = Timer.start();
+            try {
+                decision = store.check(request.key(), rule, DEFAULT_REQUEST_TOKENS, nowMillis);
+            } finally {
+                sample.stop(metrics.valkeyLatency());
+            }
+        } catch (UnknownRuleException ex) {
+            throw ex; // 400, not a store failure
+        } catch (Exception ex) {
+            // RATIONALE: a store failure (rule lookup or decision while Valkey is
+            // unreachable) is surfaced as an 'error' check result and bumps the
+            // redis_unavailable counter, so a rejection-rate spike can be
+            // distinguished from a real outage.
+            metrics.recordCheck(request.rule(), "error");
+            metrics.recordStoreError();
+            throw ex;
+        }
+        metrics.recordCheck(rule.name(), decision.allowed() ? "allowed" : "rejected");
         if (!decision.allowed()) {
             throw new RateLimitExceededException(decision);
         }

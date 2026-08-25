@@ -51,3 +51,16 @@ curl -s -X POST localhost:8080/v1/check \
 ```
 
 Bootstrap rules: `application.yml` (`file`) < environment (`env`) < admin API (M6).
+
+## Observability
+
+The service exposes Micrometer/Prometheus metrics at `/actuator/prometheus`
+(counts, per-rule tags, Valkey latency histogram, `redis_unavailable`). The
+`deploy/` directory ships Prometheus scrape + alert rules, Alertmanager routing,
+and a pre-provisioned Grafana datasource + dashboard so the stack works out of the
+box.
+
+> **Principle:** *observability must outlive the observed.* Monitoring (Prometheus,
+> Grafana, Alertmanager) runs in separate containers/hosts from the rate-limit
+> service, so it keeps running — and keeps reporting — exactly when the thing it
+> monitors crashes.

@@ -1,0 +1,31 @@
+groups:
+  - name: rate-limiter
+    rules:
+      - alert: RateLimiterInstanceDown
+        expr: up{job="rate-limiter"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Rate limiter instance is down"
+          description: "A rate-limiter instance has been unreachable for 2 minutes."
+
+      - alert: RedisUnavailable
+        expr: increase(ratelimiter_redis_unavailable_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Valkey/Redis unavailable"
+          description: "The rate-limiter service recorded store failures; decisions are failing open/closed per rule."
+
+      - alert: RejectionRateSpike
+        expr: |
+          sum(rate(ratelimiter_checks_total{result="rejected"}[5m]))
+            / (sum(rate(ratelimiter_checks_total[5m])) > 0) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Rejection rate spike"
+          description: "More than 50% of checks were rejected over the last 5 minutes."
