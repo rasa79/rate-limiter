@@ -42,6 +42,18 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!--
+            Lettuce (async, thread-safe Redis/Valkey client) for the production
+            backend. We use the raw client with a StatefulRedisConnection rather
+            than Spring Data Redis, so the Lua EVALSHA/EVAL fallback (M4) is under
+            our control and there is no RedisTemplate auto-config in the path.
+            Version is managed by the Spring Boot BOM.
+        -->
+        <dependency>
+            <groupId>io.lettuce</groupId>
+            <artifactId>lettuce-core</artifactId>
+        </dependency>
+
         <!-- Test scope: JUnit 5, AssertJ, Mockito, TestRestTemplate/WebTestClient. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

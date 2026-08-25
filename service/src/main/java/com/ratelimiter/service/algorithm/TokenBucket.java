@@ -117,7 +117,11 @@ public final class TokenBucket {
         boolean allowed = available >= requestedTokens;
         double remaining = allowed ? available - requestedTokens : available;
 
-        long resetAtMillis = resetAtMillis(available, nowMillis);
+        // RATIONALE: reset_at is "when the bucket is next full", which depends on
+        // the balance AFTER this decision (remaining), not the pre-consumption
+        // balance. For an allowed request that consumed tokens, using 'available'
+        // would understate the time-to-full.
+        long resetAtMillis = resetAtMillis(remaining, nowMillis);
         long retryAfterSeconds = allowed ? 0 : retryAfterSeconds(requestedTokens, available);
 
         State newState = new State(remaining, nowMillis);

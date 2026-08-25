@@ -5,24 +5,23 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
 import org.springframework.web.client.RestClient;
+import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * Shared base for the end-to-end integration tests.
  *
- * <p>It boots the full application on a random port (real HTTP), keeps a real
- * Testcontainers Valkey container across the suite (so the harness is proven
- * now and the Valkey backend in M4 has a container ready), and pins the
- * application clock to a fixed instant so the check-path behaviour is
- * deterministic.
+ * <p>It boots the full application on a random port (real HTTP) and keeps a real
+ * Testcontainers Valkey container across the whole suite.
  *
- * <p>// RATIONALE: tests run against a REAL container and a REAL HTTP server,
- * never a mock of the store — this is what makes the integration suite prove the
- * wiring (M4 proves the Lua script) rather than the test double.
+ * <p>// RATIONALE: the container is a SINGLETON started once, not a
+ * {@code @Container static} restarted per test class. Spring caches the
+ * application context by configuration, so several tests share one context whose
+ * Lettuce connection is bound to ONE address; if the container were restarted on
+ * a new random port per class, that cached connection would point at a stale port
+ * (connection reset). One stable container for the whole JVM keeps the address
+ * constant. Testcontainers' Ryuk resource-reaper cleans it up when the JVM exits.
  */
-@Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(FixedClockConfig.class)
 public abstract class IntegrationTestBase {
@@ -33,10 +32,8 @@ public abstract class IntegrationTestBase {
     protected static final String STORE_IMAGE =
             System.getenv().getOrDefault("RATE_LIMITER_IMAGE", "valkey/valkey:8");
 
-    /** Shared Valkey container, exposed on 6379 (the default port). */
-    @Container
-    protected static GenericContainer<?> valkey =
-            new GenericContainer<>(STORE_IMAGE).withExposedPorts(6379);
+    /** Single suite-wide Valkey container, started once. */
+    protected static final GenericContainer<?> valkey = startValkey();
 
     /** The port the application is running on (randomly assigned). */
     @LocalServerPort
@@ -44,6 +41,14 @@ public abstract class IntegrationTestBase {
 
     /** A blocking REST client pointing at the running server. */
     protected RestClient http;
+
+    private static GenericContainer<?> startValkey() {
+        GenericContainer<?> container = new GenericContainer<>(STORE_IMAGE).withExposedPorts(6379);
+        if (DockerClientFactory.instance().isDockerAvailable()) {
+            container.start();
+        }
+        return container;
+    }
 
     /** Sets up the REST client bound to the random port. */
     @BeforeEach

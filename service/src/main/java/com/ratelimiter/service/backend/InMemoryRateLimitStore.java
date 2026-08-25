@@ -1,6 +1,7 @@
 package com.ratelimiter.service.backend;
 
 import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import com.ratelimiter.service.algorithm.Decision;
 import com.ratelimiter.service.algorithm.TokenBucket;
@@ -24,6 +25,7 @@ import com.ratelimiter.service.rules.Rule;
  * state in Valkey.
  */
 @Component
+@ConditionalOnProperty(name = "ratelimiter.store", havingValue = "in-memory", matchIfMissing = true)
 public class InMemoryRateLimitStore implements RateLimitStore {
 
     private final ConcurrentHashMap<String, TokenBucket.State> states = new ConcurrentHashMap<>();
