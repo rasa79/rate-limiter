@@ -5,16 +5,39 @@ A centralized, stateless, distributed rate-limiting service (Java 25 + Spring Bo
 an atomic Lua script. Each instance is stateless, so any number can sit behind a
 load balancer.
 
-> This README is a work in progress and is finalized in the documentation pass
-> (M15). Milestones M1–M5 are complete.
+## Architecture
 
-## Quickstart (M5 state)
+```
+        client
+          │  HTTP/JSON (or via the reference filter)
+          ▼
+   ┌──────────────┐  least_conn, no sticky (ADR-0005)
+   │    nginx     │──► rate-limiter-1 ─┐
+   └──────────────┘──► rate-limiter-2 ─┼──► Valkey (primary + replica + 3 sentinels)
+                     └► rate-limiter-3 ─┘        ▲  Lua scripts (atomic)
+                                                  │  EVALSHA/EVAL fallback
+        rules/state: Valkey; rules hot-reloaded via admin API + pub/sub (M6)
+        observability: /actuator/prometheus → Prometheus → Grafana / Alertmanager
+```
 
-Requires JDK 25 + Docker + Maven.
+- **Stateless instances** — rules and counters live only in Valkey; an instance
+  crash just means "restart + re-warm" (no WAL, no leader election).
+- **Atomicity via Lua** (ADR-0003) — each check is a single atomic script, so a
+  crash mid-request leaves no partial state, and concurrent requests on a key can
+  never over-drain.
+
+## Quickstart
+
+Requires **JDK 25 + Docker** (Maven wrapper is committed).
 
 ```shell
-./mvnw verify        # runs unit + property + integration (Testcontainers) suites
-./mvnw spring-boot:run
+./mvnw verify                     # unit + property + integration (Testcontainers) suites
+./mvnw -pl service spring-boot:run   # run the service with the in-memory store (no Valkey needed)
+```
+
+Run the production-shaped topology with the reference filter + examples:
+```shell
+cd deploy && docker compose up --build   # nginx LB -> 3 instances -> Valkey HA + monitoring + autoheal
 ```
 
 The app boots on `:8080`. Two store backends are selected by `RATELIMITER_STORE`
@@ -57,7 +80,48 @@ curl -s -X POST localhost:8080/v1/check \
 # -> {"allowed":true,"remaining":4.0,"reset_at":...,"retry_after_seconds":0}
 ```
 
-Bootstrap rules: `application.yml` (`file`) < environment (`env`) < admin API (M6).
+### Config precedence
+
+Rules and settings are resolved **file < env < admin API**:
+1. `application.yml`/env bootstrap rules are loaded once (idempotent).
+2. An env override (e.g. `RATELIMITER_STORE=valkey`) wins over the file.
+3. The admin API (`PUT /v1/rules/{name}`) overrides both at runtime, without a
+   restart, and is propagated to every instance via pub/sub + a TTL safety net (M6).
+
+This is pinned by `ConfigPrecedenceTest`.
+
+## Client integration
+
+The reference integration is the `rate-limiter-filter` module (a publishable
+artifact). It extracts an API key + rule from headers, calls `POST /v1/check`,
+short-circuits a 429 with `Retry-After`, and applies a per-rule fail-open/fail-closed
+(ADR-0001) wrapped in a Resilience4j circuit breaker.
+
+```yaml
+ratelimiter:
+  filter:
+    service-url: http://rate-limiter:8080
+    default-rule: free          # or read from X-Rate-Limit-Rule
+    fail-mode: OPEN
+    fail-closed-rules: [payment]   # ADR-0001: money path fails closed
+```
+
+Example apps in `examples/` show the patterns:
+- `saas-tiers` — tier-based rules + runtime tier upgrade via the admin API.
+- `flash-sale` — dual-key strategy (per-user fairness + shared payment key) with the
+  fail-closed money path.
+- `python-worker` — polyglot consumption (plain HTTP/JSON, no SDK).
+
+## Design trade-offs
+
+| Decision | Trade-off accepted | See |
+|---|---|---|
+| Stateless service + Valkey | a restart just re-warms (no WAL/leader election) | §Architecture |
+| Atomic Lua per check | no resume needed; correctness lives in the script | ADR-0003 |
+| AOF `appendfsync everysec` | ≤1s counter loss on host death (ok vs ~10× latency) | ADR-0002 |
+| Default fail-open, per-rule fail-closed | availability bias for the common case | ADR-0001 |
+| `least_conn`, no sticky sessions | no affinity; aids rebalancing | ADR-0005 |
+| Valkey default, Redis verified | portability verified in CI; BSD/Linux Foundation | ADR-0004 |
 
 ## Observability
 
