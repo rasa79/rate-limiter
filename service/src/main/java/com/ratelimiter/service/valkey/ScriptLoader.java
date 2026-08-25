@@ -27,9 +27,11 @@ import org.springframework.stereotype.Component;
 public class ScriptLoader {
 
     private static final String TOKEN_BUCKET_PATH = "/lua/token_bucket.lua";
+    private static final String SLIDING_WINDOW_PATH = "/lua/sliding_window.lua";
 
     private final StatefulRedisConnection<String, String> connection;
-    private String tokenBucketSha;
+    private final String tokenBucketSha;
+    private final String slidingWindowSha;
 
     /**
      * Loads all scripts at startup and records their SHAs.
@@ -39,6 +41,7 @@ public class ScriptLoader {
     public ScriptLoader(StatefulRedisConnection<String, String> connection) {
         this.connection = connection;
         this.tokenBucketSha = connection.sync().scriptLoad(load(TOKEN_BUCKET_PATH));
+        this.slidingWindowSha = connection.sync().scriptLoad(load(SLIDING_WINDOW_PATH));
     }
 
     /**
@@ -53,23 +56,33 @@ public class ScriptLoader {
      */
     public List<String> tokenBucket(String key, double capacity, double refillPerSecond,
             double requestedTokens, long nowMillis) {
-        String[] keys = { "rl:tc:" + key };
-        String[] args = {
-                String.valueOf(capacity),
-                String.valueOf(refillPerSecond),
-                String.valueOf(requestedTokens),
-                String.valueOf(nowMillis)
-        };
-        RedisCommands<String, String> commands = connection.sync();
-        try {
-            return commands.evalsha(tokenBucketSha, ScriptOutputType.MULTI, keys, args);
-        } catch (RedisNoScriptException noscript) {
-            // RATIONALE: re-register the script so the next call uses EVALSHA again
-            // (otherwise every call would pay the EVAL path after a SCRIPT FLUSH or
-            // a failover to a replica that never saw the script).
-            tokenBucketSha = commands.scriptLoad(tokenBucketScript());
-            return commands.eval(tokenBucketScript(), ScriptOutputType.MULTI, keys, args);
-        }
+        return eval(tokenBucketSha, TOKEN_BUCKET_PATH,
+                new String[] { "rl:tc:" + key },
+                new String[] {
+                        String.valueOf(capacity),
+                        String.valueOf(refillPerSecond),
+                        String.valueOf(requestedTokens),
+                        String.valueOf(nowMillis)
+                });
+    }
+
+    /**
+     * Runs the sliding-window script atomically.
+     *
+     * @param key the rate-limit key
+     * @param limit the max events per window
+     * @param windowMillis the rolling window length
+     * @param nowMillis the injected current time
+     * @return {@code [allowed, remaining, resetAtMillis, retryAfterSeconds]} as strings
+     */
+    public List<String> slidingWindow(String key, double limit, long windowMillis, long nowMillis) {
+        return eval(slidingWindowSha, SLIDING_WINDOW_PATH,
+                new String[] { "rl:sw:" + key, "rl:sw:" + key + ":seq" },
+                new String[] {
+                        String.valueOf(limit),
+                        String.valueOf(windowMillis),
+                        String.valueOf(nowMillis)
+                });
     }
 
     /**
@@ -77,6 +90,36 @@ public class ScriptLoader {
      */
     public String tokenBucketSha() {
         return tokenBucketSha;
+    }
+
+    /**
+     * @return the SHA of the sliding-window script
+     */
+    public String slidingWindowSha() {
+        return slidingWindowSha;
+    }
+
+    /**
+     * Executes a script with EVALSHA, falling back to EVAL (and re-registering
+     * the script) on a {@code NOSCRIPT} response.
+     *
+     * @param sha the cached SHA of the script
+     * @param path the classpath path of the script source
+     * @param keys the script keys
+     * @param args the script arguments
+     * @return the script result (MULTI output)
+     */
+    private List<String> eval(String sha, String path, String[] keys, String[] args) {
+        RedisCommands<String, String> commands = connection.sync();
+        try {
+            return commands.evalsha(sha, ScriptOutputType.MULTI, keys, args);
+        } catch (RedisNoScriptException noscript) {
+            // Re-register so the next call uses EVALSHA again (SCRIPT FLUSH or a
+            // failover to a replica that never saw the script).
+            String script = load(path);
+            commands.scriptLoad(script);
+            return commands.eval(script, ScriptOutputType.MULTI, keys, args);
+        }
     }
 
     /**
@@ -95,9 +138,5 @@ public class ScriptLoader {
         } catch (IOException ex) {
             throw new IllegalStateException("could not read script: " + path, ex);
         }
-    }
-
-    private static String tokenBucketScript() {
-        return load(TOKEN_BUCKET_PATH);
     }
 }

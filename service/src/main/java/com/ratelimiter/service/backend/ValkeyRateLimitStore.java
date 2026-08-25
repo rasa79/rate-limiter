@@ -4,12 +4,13 @@ import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import com.ratelimiter.service.algorithm.Decision;
+import com.ratelimiter.service.rules.Algorithm;
 import com.ratelimiter.service.rules.Rule;
 import com.ratelimiter.service.valkey.ScriptLoader;
 
 /**
  * The production {@link RateLimitStore}: every decision is executed atomically
- * inside Valkey by the Lua script (see {@code lua/token_bucket.lua}).
+ * inside Valkey by a Lua script, selected by the rule's {@link Algorithm}.
  *
  * <p>The controller is unchanged from M3 — only this bean is wired in instead of
  * the in-memory one (selected by {@code ratelimiter.store=valkey}). The store is
@@ -27,7 +28,7 @@ public class ValkeyRateLimitStore implements RateLimitStore {
     private final ScriptLoader scriptLoader;
 
     /**
-     * @param scriptLoader executes the token-bucket Lua script
+     * @param scriptLoader executes the rate-limit Lua scripts
      */
     public ValkeyRateLimitStore(ScriptLoader scriptLoader) {
         this.scriptLoader = scriptLoader;
@@ -35,14 +36,28 @@ public class ValkeyRateLimitStore implements RateLimitStore {
 
     @Override
     public Decision check(String key, Rule rule, double requestedTokens, long nowMillis) {
-        List<String> result = scriptLoader.tokenBucket(
-                key, rule.capacity(), rule.refillPerSecond(), requestedTokens, nowMillis);
+        return switch (rule.algorithm()) {
+            case TOKEN_BUCKET -> tokenBucket(key, rule, requestedTokens, nowMillis);
+            case SLIDING_WINDOW -> slidingWindow(key, rule, nowMillis);
+        };
+    }
 
+    private Decision tokenBucket(String key, Rule rule, double requestedTokens, long nowMillis) {
+        List<String> result = scriptLoader.tokenBucket(
+                key, rule.limit(), rule.refillPerSecond(), requestedTokens, nowMillis);
+        return parse(result);
+    }
+
+    private Decision slidingWindow(String key, Rule rule, long nowMillis) {
+        List<String> result = scriptLoader.slidingWindow(key, rule.limit(), rule.windowMillis(), nowMillis);
+        return parse(result);
+    }
+
+    private Decision parse(List<String> result) {
         boolean allowed = "1".equals(result.get(0));
         double remaining = Double.parseDouble(result.get(1));
         long resetAtMillis = Long.parseLong(result.get(2));
         long retryAfterSeconds = Long.parseLong(result.get(3));
-
         return new Decision(allowed, remaining, resetAtMillis, retryAfterSeconds);
     }
 }

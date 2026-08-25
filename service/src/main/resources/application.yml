@@ -22,12 +22,24 @@ ratelimiter:
   rules:
     standard:
       name: standard
-      capacity: 100
+      algorithm: TOKEN_BUCKET
+      limit: 100
       refillPerSecond: 10.0
     strict:
       name: strict
-      capacity: 5
+      algorithm: TOKEN_BUCKET
+      limit: 5
       refillPerSecond: 1.0
+    rolling-hour:
+      name: rolling-hour
+      algorithm: SLIDING_WINDOW
+      limit: 100
+      windowMillis: 3600000
+    burst:
+      name: burst
+      algorithm: SLIDING_WINDOW
+      limit: 5
+      windowMillis: 1000
 
 management:
   endpoints:
