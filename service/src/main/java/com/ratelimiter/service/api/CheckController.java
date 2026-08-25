@@ -4,7 +4,7 @@ import java.time.Clock;
 import com.ratelimiter.service.algorithm.Decision;
 import com.ratelimiter.service.backend.RateLimitStore;
 import com.ratelimiter.service.rules.Rule;
-import com.ratelimiter.service.rules.RuleRegistry;
+import com.ratelimiter.service.rules.RuleCache;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,18 +27,18 @@ public class CheckController {
     private static final double DEFAULT_REQUEST_TOKENS = 1.0;
 
     private final RateLimitStore store;
-    private final RuleRegistry registry;
+    private final RuleCache ruleCache;
     private final Clock clock;
 
     /**
      * @param store the rate-limit state store (the component that will be
      *              swapped for a Valkey backend in M4)
-     * @param registry resolves a request's rule name to a {@link Rule}
+     * @param ruleCache resolves a request's rule name, refreshing from the store
      * @param clock supplies "now" to the decision
      */
-    public CheckController(RateLimitStore store, RuleRegistry registry, Clock clock) {
+    public CheckController(RateLimitStore store, RuleCache ruleCache, Clock clock) {
         this.store = store;
-        this.registry = registry;
+        this.ruleCache = ruleCache;
         this.clock = clock;
     }
 
@@ -59,7 +59,7 @@ public class CheckController {
                 || request.rule() == null || request.rule().isBlank()) {
             throw new IllegalArgumentException("'key' and 'rule' are required");
         }
-        Rule rule = registry.resolve(request.rule())
+        Rule rule = ruleCache.resolve(request.rule())
                 .orElseThrow(() -> new UnknownRuleException(request.rule()));
 
         long nowMillis = clock.millis();

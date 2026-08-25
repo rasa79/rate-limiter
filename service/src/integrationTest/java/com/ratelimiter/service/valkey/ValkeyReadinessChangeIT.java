@@ -66,10 +66,11 @@ class ValkeyReadinessChangeIT {
         await(() -> readiness().equals("DOWN"), 20_000);
 
         readinessValkey.start();
-        // A fresh container lost the Lua scripts. A check re-registers them via
-        // the EVALSHA -> NOSCRIPT -> EVAL fallback, after which the 'scripts
-        // loaded' readiness condition is satisfied. Retry until the container is
-        // fully back and the scripts are re-registered.
+        // A fresh container lost BOTH the Lua scripts AND the bootstrap rules
+        // (the rule store lives in Valkey). Re-seed the rule, then a check
+        // re-registers the scripts via the EVALSHA -> NOSCRIPT -> EVAL fallback,
+        // after which the 'scripts loaded' readiness condition is satisfied.
+        putStandardRule();
         await(() -> {
             try {
                 check();
@@ -78,6 +79,14 @@ class ValkeyReadinessChangeIT {
             }
             return readiness().equals("UP");
         }, 30_000);
+    }
+
+    private void putStandardRule() {
+        http.put().uri("/v1/rules/standard")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("{\"algorithm\":\"TOKEN_BUCKET\",\"limit\":100,\"refillPerSecond\":10,\"windowMillis\":0}")
+                .retrieve().onStatus(code -> true, (request, resp) -> {
+                }).toBodilessEntity();
     }
 
     private void check() {

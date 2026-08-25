@@ -3,10 +3,12 @@ package com.ratelimiter.service.valkey;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.RedisURI;
 import io.lettuce.core.api.StatefulRedisConnection;
+import io.lettuce.core.pubsub.StatefulRedisPubSubConnection;
 import java.time.Duration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 /**
  * Wires a raw Lettuce client and a shared {@link StatefulRedisConnection}.
@@ -45,7 +47,23 @@ public class ValkeyConfig {
      * @return a shared connection (closed with the context)
      */
     @Bean(destroyMethod = "close")
+    @Primary
     public StatefulRedisConnection<String, String> redisConnection(RedisClient client) {
         return client.connect();
+    }
+
+    /**
+     * A dedicated pub/sub connection.
+     *
+     * <p>// RATIONALE: subscribing on the shared command connection would put it
+     * into pub/sub mode, where normal commands are rejected. Rule invalidation
+     * therefore uses its own connection, leaving the command connection free.
+     *
+     * @param client the Lettuce client
+     * @return a dedicated pub/sub connection (closed with the context)
+     */
+    @Bean(destroyMethod = "close")
+    public StatefulRedisPubSubConnection<String, String> pubSubConnection(RedisClient client) {
+        return client.connectPubSub();
     }
 }

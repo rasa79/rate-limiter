@@ -46,6 +46,16 @@ public class ApiExceptionHandler {
     }
 
     /**
+     * @param ex the not-found exception (admin API reads of a missing rule)
+     * @return a 404 response
+     */
+    @ExceptionHandler(RuleNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleRuleNotFound(RuleNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponse("rule_not_found", ex.getMessage()));
+    }
+
+    /**
      * @param ex a malformed-body or validation failure
      * @return a 400 response with the message
      */

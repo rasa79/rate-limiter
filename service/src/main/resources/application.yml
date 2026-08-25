@@ -19,6 +19,9 @@ server:
 # (env), which is how a deployment opts into Valkey. Precedence (documented in
 # README): file < env < admin API.
 ratelimiter:
+  # Rule cache secondary freshness bound (seconds); pub/sub invalidation makes
+  # changes immediate, this bound guarantees convergence if a message is lost.
+  cache-ttl-seconds: 30
   rules:
     standard:
       name: standard
