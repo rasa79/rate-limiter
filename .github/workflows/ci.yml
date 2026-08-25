@@ -46,6 +46,10 @@ jobs:
       - name: Make Maven wrapper executable
         run: chmod +x mvnw
 
+      # Run the full lifecycle: unit + property (surefire) and the end-to-end
+      # integration + concurrency suite (failsafe, *IT / *ConcurrencyIT), all
+      # PR-gated. The concurrency suite proves Lua atomicity with exact-equality
+      # assertions; it must run in the PR gate (not just nightly).
       - name: Build and verify
         run: ./mvnw -B -ntp verify
 

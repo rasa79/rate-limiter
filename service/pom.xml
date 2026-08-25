@@ -132,6 +132,24 @@
                             </sources>
                         </configuration>
                     </execution>
+                    <!--
+                        Concurrency source set (src/concurrencyTest/java): proves
+                        Lua atomicity by racing many threads through the real HTTP
+                        API. Compiled into the same test classpath (so it can reuse
+                        the integration base) and run by failsafe (PR-gated).
+                    -->
+                    <execution>
+                        <id>add-concurrency-test-sources</id>
+                        <phase>generate-test-sources</phase>
+                        <goals>
+                            <goal>add-test-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>src/concurrencyTest/java</source>
+                            </sources>
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
 
