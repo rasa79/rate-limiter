@@ -43,6 +43,11 @@ ratelimiter:
       algorithm: SLIDING_WINDOW
       limit: 5
       windowMillis: 1000
+    free:
+      name: free
+      algorithm: TOKEN_BUCKET
+      limit: 5
+      refillPerSecond: 1.0
 
 management:
   endpoints:

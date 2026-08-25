@@ -1,0 +1,31 @@
+# Example 1 (SaaS tiers): the rate-limiter service plus the filter-enabled SaaS
+# example app, sharing the Valkey instance. This is the M7 declarative skeleton;
+# the service/example images are built in M10 (multi-stage Dockerfiles), and the
+# full production topology (nginx, HA, monitoring) lands in M10 too.
+services:
+  valkey:
+    image: valkey/valkey:8
+    ports:
+      - "6379:6379"
+
+  rate-limiter:
+    # Built from service/ (M10). Runs the store against Valkey.
+    image: rate-limiter-service
+    environment:
+      RATELIMITER_STORE: valkey
+      RATELIMITER_VALKEY_HOST: valkey
+      RATELIMITER_VALKEY_PORT: "6379"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - valkey
+
+  saas-tiers:
+    # Built from examples/saas-tiers/ (M10). Uses the reference filter.
+    image: saas-tiers-example
+    environment:
+      RATE_LIMITER_URL: http://rate-limiter:8080
+    ports:
+      - "8081:8081"
+    depends_on:
+      - rate-limiter

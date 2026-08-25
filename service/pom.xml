@@ -97,6 +97,16 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!-- RATIONALE: repackage the bootable jar under an 'exec'
+                         classifier so the MAIN artifact stays a plain library jar
+                         (classes at the root). This lets the example modules consume
+                         the service as a normal dependency (e.g. booting it in a
+                         test); without it the bootable jar hides classes under
+                         BOOT-INF/ and is unusable as a library. Run via
+                         `java -jar ...-exec.jar`. -->
+                    <classifier>exec</classifier>
+                </configuration>
             </plugin>
 
             <!--

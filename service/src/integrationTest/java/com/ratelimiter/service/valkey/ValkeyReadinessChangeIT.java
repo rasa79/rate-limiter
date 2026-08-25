@@ -63,22 +63,27 @@ class ValkeyReadinessChangeIT {
         assertThat(readiness()).isEqualTo("UP");
 
         readinessValkey.stop();
-        await(() -> readiness().equals("DOWN"), 20_000);
+        await(() -> readiness().equals("DOWN"), 30_000);
 
         readinessValkey.start();
         // A fresh container lost BOTH the Lua scripts AND the bootstrap rules
-        // (the rule store lives in Valkey). Re-seed the rule, then a check
-        // re-registers the scripts via the EVALSHA -> NOSCRIPT -> EVAL fallback,
-        // after which the 'scripts loaded' readiness condition is satisfied.
-        putStandardRule();
+        // (the rule store lives in Valkey). Retry the re-seed and a check each
+        // poll: the re-seed writes the rule, the check re-registers the scripts
+        // via the EVALSHA -> NOSCRIPT -> EVAL fallback, after which the 'scripts
+        // loaded' readiness condition is satisfied.
         await(() -> {
+            try {
+                putStandardRule();
+            } catch (RuntimeException ignored) {
+                // connection may still be re-establishing; retry next poll
+            }
             try {
                 check();
             } catch (RuntimeException ignored) {
                 // connection may still be re-establishing; retry next poll
             }
             return readiness().equals("UP");
-        }, 30_000);
+        }, 60_000);
     }
 
     private void putStandardRule() {

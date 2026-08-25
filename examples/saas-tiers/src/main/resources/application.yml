@@ -1,0 +1,17 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: saas-tiers-example
+
+# The RateLimitFilter (from the filter module) is auto-configured when
+# ratelimiter.filter.service-url is set; it calls the rate-limiter service.
+ratelimiter:
+  filter:
+    service-url: ${RATE_LIMITER_URL:http://localhost:8080}
+    key-header: X-Api-Key
+    rule-header: X-Rate-Limit-Rule
+    # Tenant requests without an explicit rule header default to the 'free' tier.
+    default-rule: free
+    fail-mode: OPEN
