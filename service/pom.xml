@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.ratelimiter</groupId>
+        <artifactId>rate-limiter-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>rate-limiter-service</artifactId>
+    <name>rate-limiter-service</name>
+    <description>The rate limiter Spring Boot application.</description>
+
+    <!--
+        M1 scope: an HTTP skeleton (web + actuator) with separate liveness /
+        readiness probes. The storage backend is deliberately absent; the
+        readiness probe reports UP because nothing external is wired yet
+        (later milestones pin readiness to Valkey reachability). No mocks of
+        storage exist in this project, so there is nothing storage-related here
+        to test against in M1.
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- Test scope: JUnit 5, AssertJ, Mockito, TestRestTemplate/WebTestClient. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <!--
+                JaCoCo is wired from M1 so the CI PR gate has a coverage report
+                available immediately. Coverage is a reporting artifact, not a
+                gate: we care that the report exists and improves over time
+                (target ~85% on core packages is set in later milestones).
+            -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <!-- RATIONALE: Java 25 emits class files at major version 69, which
+                     older JaCoCo agents cannot parse (the report step failed with
+                     "Unsupported class file major version 69"). 0.8.15 is the first
+                     line that understands Java 25 bytecode. -->
+                <version>0.8.15</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

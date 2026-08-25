@@ -1,0 +1,37 @@
+# Base configuration for the rate-limiter service in M1.
+# Precedence (fixed across the project, documented in the README): file < env < admin API.
+spring:
+  application:
+    name: rate-limiter-service
+  # RATIONALE: high-concurrency, network-bound workload. Each HTTP request
+  # blocks on a store round trip, so thread-per-request on virtual threads gives
+  # the simplicity of blocking code without a reactive stack. Request handling
+  # runs on the virtual-thread scheduler; non-blocking components are unaffected.
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      # Expose the independent liveness / readiness probe groups:
+      #   /actuator/health/liveness  -> JVM alive only
+      #   /actuator/health/readiness -> able to serve traffic
+      probes:
+        enabled: true
+      # RATIONALE: show-details=always lets a reviewer see the individual
+      # component status (e.g. exactly which readiness contributor is DOWN),
+      # which is what makes the readiness probe a diagnosable contract.
+      show-details: always
+  health:
+    readiness-state:
+      enabled: true
+    liveness-state:
+      enabled: true

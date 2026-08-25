@@ -1,0 +1,23 @@
+node_modules/
+.env
+.env.local
+dist/
+build/
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Maven build output
+target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+
+# Local Maven caches (sandbox-only workspace redirection; never committed)
+.m2-repo/
+.mvn-home/

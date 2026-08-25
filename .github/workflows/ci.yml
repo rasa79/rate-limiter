@@ -1,0 +1,57 @@
+name: CI
+
+# M1: PR-gate scaffold. This job is the portable definition of "the build is
+# green": it provisions JDK 25 + Maven and runs the full `mvn verify` lifecycle,
+# which in M1 means unit/integration tests and the JaCoCo report. Later
+# milestones add the concurrency suite and the dual Valkey/Redis matrix to this
+# same gate without restructuring it.
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+# RATIONALE: cancel superseded runs ("latest wins") so cheap matrix legs don't
+# pile up on a topic branch that was already superseded by a newer push.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (${{ matrix.java }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        java: [ '25' ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+
+      - name: Cache Maven wrapper + local repository
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/wrapper
+            ~/.m2/repository
+          key: maven-cache-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            maven-cache-${{ runner.os }}-
+
+      - name: Make Maven wrapper executable
+        run: chmod +x mvnw
+
+      - name: Build and verify
+        run: ./mvnw -B -ntp verify
+
+      - name: Upload JaCoCo report
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: service/target/site/jacoco/index.html
+          if-no-files-found: warn
