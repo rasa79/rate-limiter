@@ -15,14 +15,23 @@
     <name>rate-limiter-service</name>
     <description>The rate limiter Spring Boot application.</description>
 
-    <!--
-        M1 scope: an HTTP skeleton (web + actuator) with separate liveness /
-        readiness probes. The storage backend is deliberately absent; the
-        readiness probe reports UP because nothing external is wired yet
-        (later milestones pin readiness to Valkey reachability). No mocks of
-        storage exist in this project, so there is nothing storage-related here
-        to test against in M1.
-    -->
+    <!-- Managed BOM imports for the integration-test stack (Testcontainers). -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <!-- RATIONALE: pin the whole Testcontainers module set to one line
+                     (1.21.x) so core, junit-jupiter and per-image modules never
+                     drift apart. Images are parameterized later (M14) via
+                     RATE_LIMITER_IMAGE. -->
+                <version>1.21.4</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -52,6 +61,23 @@
             <version>1.10.1</version>
             <scope>test</scope>
         </dependency>
+
+        <!--
+            Testcontainers (integration tests): we run against a REAL Valkey
+            container, never a mock. junit-jupiter brings the @Testcontainers /
+            @Container extension; the core artifact provides GenericContainer and
+            the Docker client factory. Versions come from the BOM above.
+        -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -60,6 +86,53 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+
+            <!--
+                Integration test source set (src/integrationTest/java). The tests
+                live alongside the unit tests on the test classpath but are named
+                *IT so surefire ignores them and failsafe runs them during the
+                `integration-test`/`verify` phases. Only Docker is required.
+            -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.6.0</version>
+                <executions>
+                    <execution>
+                        <id>add-integration-test-sources</id>
+                        <phase>generate-test-sources</phase>
+                        <goals>
+                            <goal>add-test-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>src/integrationTest/java</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
+                Failsafe runs the end-to-end integration tests (*IT) during
+                `verify`. It is deliberately a separate plugin from surefire so
+                the fast unit/property suite stays PR-time and the slower
+                container-backed suite still gates the build.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>integration-tests</id>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
             <!--
                 JaCoCo is wired from M1 so the CI PR gate has a coverage report
                 available immediately. Coverage is a reporting artifact, not a

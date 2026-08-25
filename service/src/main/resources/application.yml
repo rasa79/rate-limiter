@@ -1,4 +1,4 @@
-# Base configuration for the rate-limiter service in M1.
+# Base configuration for the rate-limiter service.
 # Precedence (fixed across the project, documented in the README): file < env < admin API.
 spring:
   application:
@@ -13,6 +13,18 @@ spring:
 
 server:
   port: 8080
+
+# Bootstrap rule set. Precedence (documented in README): file < env < admin API.
+ratelimiter:
+  rules:
+    standard:
+      name: standard
+      capacity: 100
+      refillPerSecond: 10.0
+    strict:
+      name: strict
+      capacity: 5
+      refillPerSecond: 1.0
 
 management:
   endpoints:

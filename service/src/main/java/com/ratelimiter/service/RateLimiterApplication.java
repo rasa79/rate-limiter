@@ -2,6 +2,7 @@ package com.ratelimiter.service;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 /**
  * Entry point for the distributed rate-limiter service.
@@ -21,6 +22,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * </ul>
  */
 @SpringBootApplication
+@ConfigurationPropertiesScan
 public class RateLimiterApplication {
 
     /**
