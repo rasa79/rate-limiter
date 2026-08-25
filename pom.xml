@@ -32,6 +32,7 @@
         <module>service</module>
         <module>filter</module>
         <module>examples/saas-tiers</module>
+        <module>examples/flash-sale</module>
     </modules>
 
     <properties>

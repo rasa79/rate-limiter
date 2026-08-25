@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -102,6 +103,26 @@ class RateLimitFilterTest {
         // Once open, the breaker short-circuits: the filter fails open (OPEN mode).
         Result r = new Result(filter, "k1", "free");
         assertThat(r.chained).isTrue();
+    }
+
+    @Test
+    void failClosedListedRuleRejectsWhenLimiterDown() throws Exception {
+        props.setFailMode(FailMode.OPEN);
+        props.setFailClosedRules(List.of("payment"));
+        RateLimitFilter filter = new RateLimitFilter((k, rule) -> {
+            throw new RuntimeException("limiter down");
+        }, props, breaker());
+
+        // The 'payment' rule is in failClosedRules -> reject (fail-closed).
+        Result pay = new Result(filter, "pay-1", "payment");
+        assertThat(pay.chained).isFalse();
+        assertThat(pay.response.getStatus()).isEqualTo(429);
+
+        // A per-user rule not listed -> fail-open (allowed), even though the limiter
+        // is down (ADR-0001).
+        Result user = new Result(filter, "user-1", "user");
+        assertThat(user.chained).isTrue();
+        assertThat(user.response.getStatus()).isEqualTo(200);
     }
 
     private CircuitBreaker breaker() {

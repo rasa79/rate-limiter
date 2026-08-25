@@ -1,5 +1,7 @@
 package com.ratelimiter.filter;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -25,6 +27,13 @@ public class FilterProperties {
     private int timeoutMillis = 1000;
 
     private FailMode failMode = FailMode.OPEN;
+
+    /**
+     * Rules that must fail CLOSED (reject) when the limiter is unavailable, even
+     * though the default {@link #failMode} is OPEN (ADR-0001). Enables per-rule
+     * asymmetry — e.g. a payment-gateway key fails closed, per-user keys fail open.
+     */
+    private List<String> failClosedRules = new ArrayList<>();
 
     private int circuitBreakerFailureRateThreshold = 50;
     private int circuitBreakerSlidingWindowSize = 10;
@@ -84,6 +93,14 @@ public class FilterProperties {
 
     public void setFailMode(FailMode failMode) {
         this.failMode = failMode;
+    }
+
+    public List<String> getFailClosedRules() {
+        return failClosedRules;
+    }
+
+    public void setFailClosedRules(List<String> failClosedRules) {
+        this.failClosedRules = failClosedRules;
     }
 
     public int getCircuitBreakerFailureRateThreshold() {

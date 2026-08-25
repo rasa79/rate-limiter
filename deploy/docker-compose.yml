@@ -138,4 +138,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
 
-  # Examples (1-3) are wired into the compose environment in M13.
+  # Examples are runnable via their own per-example READMEs against this core
+  # topology (see examples/saas-tiers, examples/flash-sale, examples/python-worker).
+  # They are intentionally not built here — each example app builds/boosts its own
+  # container (or runs as a plain process, e.g. the Python worker).

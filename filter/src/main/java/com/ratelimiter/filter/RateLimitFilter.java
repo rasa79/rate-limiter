@@ -61,7 +61,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
         try {
             if (!circuitBreaker.tryAcquirePermission()) {
-                applyFailMode(request, response, filterChain);
+                applyFailMode(request, response, filterChain, rule);
                 return;
             }
             CheckResult result = checker.check(key, rule);
@@ -74,16 +74,20 @@ public class RateLimitFilter extends OncePerRequestFilter {
         } catch (Exception ex) {
             circuitBreaker.onError(0, TimeUnit.MILLISECONDS,
                     ex instanceof IOException ? ex : new RuntimeException(ex));
-            applyFailMode(request, response, filterChain);
+            applyFailMode(request, response, filterChain, rule);
         }
     }
 
     private void applyFailMode(HttpServletRequest request, HttpServletResponse response,
-            FilterChain chain) throws IOException, ServletException {
-        if (properties.getFailMode() == FailMode.CLOSED) {
+            FilterChain chain, String rule) throws IOException, ServletException {
+        // RATIONALE (ADR-0001): the default is fail-open (availability bias); a rule
+        // opted into failClosedRules (or the whole filter set to CLOSED) fails
+        // closed. This is what lets a money path (e.g. the payment-gateway key) be
+        // fail-closed while per-user keys fail open.
+        if (properties.getFailMode() == FailMode.CLOSED
+                || properties.getFailClosedRules().contains(rule)) {
             writeRejected(response, 0);
         } else {
-            // RATIONALE: fail-open keeps the request flowing when the limiter is down.
             chain.doFilter(request, response);
         }
     }

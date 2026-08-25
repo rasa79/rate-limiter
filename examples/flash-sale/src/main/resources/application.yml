@@ -1,0 +1,17 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: flash-sale-example
+
+# Reference filter: per-user rule fails open (default), payment rule fails closed.
+ratelimiter:
+  filter:
+    service-url: ${RATE_LIMITER_URL:http://localhost:8080}
+    key-header: X-Api-Key
+    rule-header: X-Rate-Limit-Rule
+    default-rule: user
+    fail-mode: OPEN
+    fail-closed-rules:
+      - payment
