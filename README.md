@@ -21,6 +21,13 @@ The app boots on `:8080`. Two store backends are selected by `RATELIMITER_STORE`
 (`in-memory` is the default for tests/dev; `valkey` is the production backend).
 In `valkey` mode you need a Valkey instance (e.g. `docker run -p 6379:6379 valkey/valkey:8`).
 
+The store is **verified portable across Valkey and Redis** — the integration
+suite is parameterized over `RATE_LIMITER_IMAGE` and runs against both
+`valkey/valkey:8` and `redis:8` in CI (M14). Licensing note (ADR-0004): Valkey is
+BSD-licensed under the Linux Foundation; **Redis 8+ offers AGPLv3** among its
+licenses — this project neither claims Redis "isn't open source" nor implies a
+replacement relationship.
+
 ## Check API
 
 `POST /v1/check` with `{ "key": "<key>", "rule": "<rule-name>" }`:

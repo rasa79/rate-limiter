@@ -18,12 +18,18 @@ concurrency:
 
 jobs:
   build:
-    name: Build (${{ matrix.java }})
+    name: Build (${{ matrix.java }}, ${{ matrix.store }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         java: [ '25' ]
+        # RATIONALE: M14 dual-image matrix. The integration suite is parameterized
+        # over RATE_LIMITER_IMAGE (see IntegrationTestBase), so the SAME tests run
+        # against Valkey AND Redis — this verifies portability rather than claims it.
+        store:
+          - valkey/valkey:8
+          - redis:8
     steps:
       - uses: actions/checkout@v4
 
@@ -32,6 +38,9 @@ jobs:
         with:
           distribution: temurin
           java-version: ${{ matrix.java }}
+
+      - name: Set store image
+        run: echo "RATE_LIMITER_IMAGE=${{ matrix.store }}" >> "$GITHUB_ENV"
 
       - name: Cache Maven wrapper + local repository
         uses: actions/cache@v4
